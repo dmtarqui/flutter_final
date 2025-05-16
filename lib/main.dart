@@ -17,7 +17,7 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: OcrHomePage());
+    return MaterialApp(home: OcrHomePage());
   }
 }
 
@@ -71,11 +71,7 @@ class OcrHomePage extends ConsumerWidget {
                 ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.image_outlined,
-                      size: 100,
-                      color: Colors.deepPurple.shade200,
-                    ),
+                    Icon(Icons.image_outlined, size: 100, color: Colors.white),
                     const SizedBox(height: 10),
                     const Text(
                       'No Image Selected',
@@ -85,8 +81,8 @@ class OcrHomePage extends ConsumerWidget {
                 )
                 : Image.file(
                   File(imageFile.path),
-                  width: 250,
-                  height: 250,
+                  width: 300,
+                  height: 300,
                   fit: BoxFit.contain,
                 ),
             const SizedBox(height: 20),
@@ -98,11 +94,11 @@ class OcrHomePage extends ConsumerWidget {
                   color: Colors.white10,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    ocrText,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
+                child: Text(
+                  ocrText,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  maxLines: 6, // Limit to 5 lines
+                  overflow: TextOverflow.ellipsis, // Show "..." if too long
                 ),
               ),
           ],
@@ -145,11 +141,11 @@ class OcrHomePage extends ConsumerWidget {
                         );
                       }
                       : null,
-              child: const Text('Scan'),
+              child: const Icon(Icons.document_scanner, color: Colors.black),
             ),
             ElevatedButton(
               onPressed: () => _pickImage(context, ref, ImageSource.gallery),
-              child: const Text('Pick'),
+              child: const Icon(Icons.image_search, color: Colors.black),
             ),
             ElevatedButton(
               onPressed:
@@ -159,7 +155,7 @@ class OcrHomePage extends ConsumerWidget {
                         ref.read(ocrTextProvider.notifier).state = '';
                       }
                       : null,
-              child: const Text('Clear'),
+              child: const Icon(Icons.clear, color: Colors.black),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -195,19 +191,23 @@ class OcrHomePage extends ConsumerWidget {
                       ),
                 );
               },
-              child: const Text('History'),
+              child: const Icon(Icons.history, color: Colors.black),
             ),
           ],
         ),
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(
-          bottom: 60.0,
-        ), // Move FAB up by 60 pixels
-        child: FloatingActionButton(
-          backgroundColor: Colors.white,
-          onPressed: () => _pickImage(context, ref, ImageSource.camera),
-          child: const Icon(Icons.camera_alt),
+        padding: const EdgeInsets.only(bottom: 60.0),
+        child: SizedBox(
+          width: 60,
+          height: 60,
+          child: FloatingActionButton(
+            shape: const CircleBorder(),
+            backgroundColor: Colors.white,
+            hoverColor: Colors.blueAccent,
+            onPressed: () => _pickImage(context, ref, ImageSource.camera),
+            child: const Icon(Icons.camera_alt, color: Colors.black),
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
