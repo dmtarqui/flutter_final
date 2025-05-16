@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'dart:io';
+import 'db_helper.dart';
 
 final imageProvider = StateProvider<XFile?>((ref) => null);
+final ocrTextProvider = StateProvider<String>((ref) => '');
 
 void main() {
   runApp(const ProviderScope(child: MainApp()));
@@ -29,19 +32,41 @@ class OcrHomePage extends ConsumerWidget {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source);
     ref.read(imageProvider.notifier).state = pickedFile;
+    ref.read(ocrTextProvider.notifier).state =
+        ''; // Clear OCR text on new image
+  }
+
+  Future<void> _scanText(WidgetRef ref, XFile imageFile) async {
+    final inputImage = InputImage.fromFilePath(imageFile.path);
+    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    final RecognizedText recognizedText = await textRecognizer.processImage(
+      inputImage,
+    );
+    ref.read(ocrTextProvider.notifier).state = recognizedText.text;
+    await textRecognizer.close();
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final imageFile = ref.watch(imageProvider);
+    final ocrText = ref.watch(ocrTextProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SpecsOCR'),
-        backgroundColor: Colors.deepPurple,
+        title: const Text(
+          'OCR Scanner',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.blueAccent,
       ),
       backgroundColor: Colors.black87,
       body: Center(
-        child:
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             imageFile == null
                 ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -59,45 +84,131 @@ class OcrHomePage extends ConsumerWidget {
                   ],
                 )
                 : Image.file(
-                  // ignore: unnecessary_null_comparison
                   File(imageFile.path),
                   width: 250,
                   height: 250,
                   fit: BoxFit.contain,
                 ),
+            const SizedBox(height: 20),
+            if (ocrText.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    ocrText,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       bottomNavigationBar: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             ElevatedButton(
               onPressed:
                   imageFile != null
-                      ? () {
-                        print('Image: ${imageFile.toString()}');
+                      ? () async {
+                        await _scanText(ref, imageFile);
+                        final scannedText = ref.read(ocrTextProvider);
+                        if (scannedText.isNotEmpty) {
+                          await DbHelper().insertHistory(scannedText);
+                        }
+                        showDialog(
+                          context: context,
+                          builder:
+                              (context) => AlertDialog(
+                                title: const Text('Scanned Text'),
+                                content: SingleChildScrollView(
+                                  child: Text(
+                                    scannedText.isNotEmpty
+                                        ? scannedText
+                                        : 'No text found.',
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed:
+                                        () => Navigator.of(context).pop(),
+                                    child: const Text('Close'),
+                                  ),
+                                ],
+                              ),
+                        );
                       }
                       : null,
-              child: const Text('Scan Text'),
+              child: const Text('Scan'),
             ),
             ElevatedButton(
               onPressed: () => _pickImage(context, ref, ImageSource.gallery),
-              child: const Text('Pick Image'),
+              child: const Text('Pick'),
             ),
             ElevatedButton(
               onPressed:
                   imageFile != null
-                      ? () => ref.read(imageProvider.notifier).state = null
+                      ? () {
+                        ref.read(imageProvider.notifier).state = null;
+                        ref.read(ocrTextProvider.notifier).state = '';
+                      }
                       : null,
-              child: const Text('Clear Image'),
+              child: const Text('Clear'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final history = await DbHelper().getHistory();
+                showDialog(
+                  context: context,
+                  builder:
+                      (context) => AlertDialog(
+                        title: const Text('History'),
+                        content: SizedBox(
+                          width: double.maxFinite,
+                          child:
+                              history.isEmpty
+                                  ? const Text('No history yet.')
+                                  : ListView.builder(
+                                    shrinkWrap: true,
+                                    itemCount: history.length,
+                                    itemBuilder: (context, index) {
+                                      final item = history[index];
+                                      return ListTile(
+                                        title: Text(item['text'] ?? ''),
+                                        subtitle: Text(item['createdAt'] ?? ''),
+                                      );
+                                    },
+                                  ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                );
+              },
+              child: const Text('History'),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.deepPurple,
-        onPressed: () => _pickImage(context, ref, ImageSource.camera),
-        child: const Icon(Icons.camera_alt),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(
+          bottom: 60.0,
+        ), // Move FAB up by 60 pixels
+        child: FloatingActionButton(
+          backgroundColor: Colors.white,
+          onPressed: () => _pickImage(context, ref, ImageSource.camera),
+          child: const Icon(Icons.camera_alt),
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
