@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'dart:io';
-import 'db_helper.dart';
+import 'data/db_helper.dart';
+import 'application/ocr_controller.dart';
 
 final imageProvider = StateProvider<XFile?>((ref) => null);
 final ocrTextProvider = StateProvider<String>((ref) => '');
@@ -24,32 +24,11 @@ class MainApp extends StatelessWidget {
 class OcrHomePage extends ConsumerWidget {
   const OcrHomePage({super.key});
 
-  Future<void> _pickImage(
-    BuildContext context,
-    WidgetRef ref,
-    ImageSource source,
-  ) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-    ref.read(imageProvider.notifier).state = pickedFile;
-    ref.read(ocrTextProvider.notifier).state =
-        ''; // Clear OCR text on new image
-  }
-
-  Future<void> _scanText(WidgetRef ref, XFile imageFile) async {
-    final inputImage = InputImage.fromFilePath(imageFile.path);
-    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-    final RecognizedText recognizedText = await textRecognizer.processImage(
-      inputImage,
-    );
-    ref.read(ocrTextProvider.notifier).state = recognizedText.text;
-    await textRecognizer.close();
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final imageFile = ref.watch(imageProvider);
-    final ocrText = ref.watch(ocrTextProvider);
+    final ocrState = ref.watch(ocrControllerProvider);
+    final ocrController = ref.read(ocrControllerProvider.notifier);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -67,7 +46,7 @@ class OcrHomePage extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            imageFile == null
+            ocrState.image == null
                 ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -80,13 +59,13 @@ class OcrHomePage extends ConsumerWidget {
                   ],
                 )
                 : Image.file(
-                  File(imageFile.path),
+                  File(ocrState.image!.path),
                   width: 300,
                   height: 300,
                   fit: BoxFit.contain,
                 ),
             const SizedBox(height: 20),
-            if (ocrText.isNotEmpty)
+            if (ocrState.ocrText.isNotEmpty)
               Container(
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -95,7 +74,7 @@ class OcrHomePage extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  ocrText,
+                  ocrState.ocrText,
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                   maxLines: 6, // Limit to 5 lines
                   overflow: TextOverflow.ellipsis, // Show "..." if too long
@@ -111,10 +90,10 @@ class OcrHomePage extends ConsumerWidget {
           children: [
             ElevatedButton(
               onPressed:
-                  imageFile != null
+                  ocrState.image != null
                       ? () async {
-                        await _scanText(ref, imageFile);
-                        final scannedText = ref.read(ocrTextProvider);
+                        await ocrController.scanText();
+                        final scannedText = ocrState.ocrText;
                         if (scannedText.isNotEmpty) {
                           await DbHelper().insertHistory(scannedText);
                         }
@@ -144,15 +123,14 @@ class OcrHomePage extends ConsumerWidget {
               child: const Icon(Icons.document_scanner, color: Colors.black),
             ),
             ElevatedButton(
-              onPressed: () => _pickImage(context, ref, ImageSource.gallery),
+              onPressed: () => ocrController.pickImage(ImageSource.gallery),
               child: const Icon(Icons.image_search, color: Colors.black),
             ),
             ElevatedButton(
               onPressed:
-                  imageFile != null
+                  ocrState.image != null
                       ? () {
-                        ref.read(imageProvider.notifier).state = null;
-                        ref.read(ocrTextProvider.notifier).state = '';
+                        ocrController.clear();
                       }
                       : null,
               child: const Icon(Icons.clear, color: Colors.black),
@@ -205,7 +183,7 @@ class OcrHomePage extends ConsumerWidget {
             shape: const CircleBorder(),
             backgroundColor: Colors.white,
             hoverColor: Colors.blueAccent,
-            onPressed: () => _pickImage(context, ref, ImageSource.camera),
+            onPressed: () => ocrController.pickImage(ImageSource.camera),
             child: const Icon(Icons.camera_alt, color: Colors.black),
           ),
         ),
